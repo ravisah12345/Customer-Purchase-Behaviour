@@ -1,0 +1,67 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+sklearn_env/
+.env
+.env.*
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Dataset and output files
+data/raw/
+outputs/
+src/data/processed/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.iml
+
+# macOS files
+.DS_Store
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+*.swp
+
+# Package manager
+*.egg-info/
+*.eggs/
+*.dist-info/
+
+# Python compiled files
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+
+# Distribution / packaging
+build/
+dist/
+.eggs/
+
+# Notebook output
+*.nbconvert.ipynb
+
+# Environment-specific files
+.env
+.venv
+
+# Secret and config files
+credentials.json
+secrets.json
