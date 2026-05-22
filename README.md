@@ -44,7 +44,7 @@ Raw Dataset (541,909 transactions)
 │            Repeat Buyer Classification            │
 │                                                   │
 │  Logistic Regression | Decision Tree | Random Forest│
-│       96.31%         |    97.46%     |   98.50% ⭐  │
+│       96.31%         |    97.46%     |   98.50% │
 └────────────────────────┬──────────────────────────┘
                          │
                          ▼
@@ -88,7 +88,7 @@ Raw Dataset (541,909 transactions)
 
 | Model | Accuracy | Precision | Recall | F1 Score |
 |---|---|---|---|---|
-| **Random Forest** ⭐ | **98.50%** | **99.64%** | **98.06%** | **98.84%** |
+| **Random Forest**  | **98.50%** | **99.64%** | **98.06%** | **98.84%** |
 | Decision Tree | 97.46% | 97.89% | 98.24% | 98.06% |
 | Logistic Regression | 96.31% | 99.81% | 94.53% | 97.10% |
 
@@ -242,8 +242,8 @@ project root/
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/customer-retention-dissertation.git
-cd customer-retention-dissertation
+git clone https://github.com/ravisah12345/Customer-Purchase-Behaviour
+cd Customer-Purchase-Behaviour
 ```
 
 ### 2. Create and Activate Virtual Environment
@@ -264,7 +264,7 @@ pip install -r requirements.txt
 
 ### 4. Add the Dataset
 Download the UCI Online Retail II dataset from Kaggle:
-> https://www.kaggle.com/datasets/mashlyn/online-retail-ii-uci
+> https://www.kaggle.com/code/hellbuoy/online-retail-k-means-hierarchical-clustering
 
 Place the downloaded file at:
 ```
@@ -443,4 +443,3 @@ Submitted as a BSc final-year dissertation at York St John University (2026). Th
 ## License
 
 Submitted for academic assessment at York St John University. Available for reference and educational purposes.
-
