@@ -82,302 +82,211 @@ Raw Dataset (541,909 transactions)
 
 ---
 
+## What the system does
+
+When you run the pipeline, here is what happens in order:
+
+1. Raw data is cleaned — cancellations removed, missing customer IDs dropped, prices fixed, outliers clipped. 397,484 rows survive out of 541,909.
+2. Each customer gets a profile — tenure, recency, total spend, number of products, average order value.
+3. Three classifiers are trained to predict whether a customer will return: Logistic Regression, Decision Tree, and Random Forest.
+4. The best model (Random Forest, 98.5% accuracy) is saved and evaluated three ways — standard split, temporal split, and cold-start.
+5. Customers are grouped into three stages: new (1 invoice), early (2-3 invoices), and established (4+).
+6. Each stage gets a recommendation method — popularity for new, Apriori market basket for early, collaborative filtering for established.
+7. All three recommenders are evaluated using Precision@K, Recall@K, NDCG, MAP, Lift and Coverage at K=5 and K=10.
+8. Everything gets written to CSV files and figures in the outputs folder.
+
+---
+
 ## Results
 
-### Classification Performance
+### How the classifiers compared
 
-| Model | Accuracy | Precision | Recall | F1 Score |
+| Model | Accuracy | Precision | Recall | F1 |
 |---|---|---|---|---|
-| **Random Forest**  | **98.50%** | **99.64%** | **98.06%** | **98.84%** |
+| **Random Forest** ⭐ | **98.50%** | **99.64%** | **98.06%** | **98.84%** |
 | Decision Tree | 97.46% | 97.89% | 98.24% | 98.06% |
 | Logistic Regression | 96.31% | 99.81% | 94.53% | 97.10% |
 
-Random Forest was selected as the best model and saved to `outputs/models/`.
+Random Forest won comfortably and was saved as the production model.
 
 ---
 
-### Critical Evaluation
+### Is the model actually good or just lucky?
 
-| Evaluation Type | Accuracy | F1 | Notes |
+This was a fair question from supervision — 98.5% looks suspiciously high. So three evaluations were run:
+
+| Test | Accuracy | F1 | What it means |
 |---|---|---|---|
-| Standard Random Split | 98.50% | 0.9884 | Baseline — same time period |
-| **Temporal Split** | **99.15%** | **0.9952** | Train on early customers, test on later |
-| Cold-Start | N/A | N/A | Structurally not evaluable — confirms cold-start problem |
+| Standard random split | 98.50% | 0.9884 | Baseline |
+| Temporal split (train early, test later) | 99.15% | 0.9952 | Model works across time too |
+| Cold-start (brand new customers) | N/A | N/A | Cannot be evaluated — explains why the hybrid pipeline exists |
 
-The temporal split result (99.15%) is higher than the standard split, confirming the model generalises well across time. The cold-start limitation directly motivated the hybrid recommendation design.
-
----
-
-### Feature Importance (Random Forest)
-
-| Rank | Feature | MDI Importance | Permutation Importance |
-|---|---|---|---|
-| 1 | tenure_days | 55.7% | 0.339 |
-| 2 | total_spend | 16.7% | 0.001 |
-| 3 | items | 10.8% | ~0.000 |
-| 4 | unique_products | 7.8% | ~0.000 |
-| 5 | recency_days | 5.6% | ~0.000 |
-| 6 | avg_line_value | 2.4% | ~0.000 |
-
-Permutation importance confirms `tenure_days` as the dominant predictive signal. All country features have zero permutation importance, confirming that behavioural patterns — not geography — drive the classifier.
+The temporal result is actually higher than the standard one, which means the model is not just memorising patterns — it genuinely generalises. The cold-start test failing is the honest finding: the model needs purchase history to work, and that is the whole reason new customers get a popularity-based fallback instead.
 
 ---
 
-### Customer Segmentation
+### What drives the predictions
 
-| Stage | Customers | % of Total | Avg Invoices | Avg Spend | Avg Products | Rec. Method |
-|---|---|---|---|---|---|---|
-| New (1 invoice) | 1,497 | 34.6% | 1.00 | £357.95 | 21.8 | Popularity (country) |
-| Early (2-3 invoices) | 1,334 | 30.8% | 2.38 | £814.12 | 46.2 | Apriori Market Basket |
-| **Established (4+)** | **1,501** | **34.6%** | **9.18** | **£4,219.29** | **114.9** | Collaborative Filtering |
+| Feature | MDI Importance | Permutation Importance |
+|---|---|---|
+| tenure_days | 55.7% | 0.339 |
+| total_spend | 16.7% | 0.001 |
+| items | 10.8% | ~0.000 |
+| unique_products | 7.8% | ~0.000 |
+| recency_days | 5.6% | ~0.000 |
 
-Established customers spend 11.8x more than new customers on average, justifying personalised collaborative filtering for this segment.
+How long someone has been a customer (tenure) is by far the strongest signal. Country makes no difference at all — permutation importance for every country feature came out at zero.
 
 ---
 
-### Recommender System Evaluation
+### Customer segments
+
+| Stage | Customers | Avg Spend | Avg Orders | Recommendation method |
+|---|---|---|---|---|
+| New (1 invoice) | 1,497 (34.6%) | £357.95 | 1.00 | Country-based popularity |
+| Early (2-3 invoices) | 1,334 (30.8%) | £814.12 | 2.38 | Apriori market basket |
+| Established (4+ invoices) | 1,501 (34.6%) | £4,219.29 | 9.18 | Collaborative filtering |
+
+Established customers spend about 12x more than new ones on average. That gap is why it is worth using a more sophisticated recommendation method for them.
+
+---
+
+### How the recommenders performed
 
 | Method | K | Precision@K | Recall@K | Lift | NDCG@K | MAP@K | Coverage |
 |---|---|---|---|---|---|---|---|
 | Popularity-based | 5 | 0.1312 | 0.0124 | 96.10x | 0.1320 | 0.0767 | 100% |
-| Market Basket (Apriori) | 5 | 0.1333 | 0.0260 | 97.68x | **0.2304** | **0.1375** | 1.39% |
-| **Collaborative Filtering** | **5** | **0.1460** | 0.0249 | **106.93x** | 0.1640 | 0.1168 | **100%** |
+| Apriori (Market Basket) | 5 | 0.1333 | 0.0260 | 97.68x | **0.2304** | **0.1375** | 1.39% |
+| **Collaborative Filtering** ⭐ | **5** | **0.1460** | 0.0249 | **106.93x** | 0.1640 | 0.1168 | **100%** |
 | Popularity-based | 10 | 0.1055 | 0.0213 | 38.66x | 0.1154 | 0.0523 | 100% |
-| Market Basket (Apriori) | 10 | 0.0667 | 0.0260 | 24.42x | 0.1609 | 0.0792 | 1.39% |
-| **Collaborative Filtering** | **10** | 0.1024 | **0.0320** | 37.52x | 0.1307 | 0.0763 | **100%** |
+| Apriori (Market Basket) | 10 | 0.0667 | 0.0260 | 24.42x | 0.1609 | 0.0792 | 1.39% |
+| **Collaborative Filtering** ⭐ | **10** | 0.1024 | **0.0320** | 37.52x | 0.1307 | 0.0763 | **100%** |
 
-**Key findings:**
-- Collaborative Filtering achieves best Precision@5 (0.146), best Lift@5 (106.93x), and best MAP@5 (0.117)
-- Apriori achieves best NDCG@5 (0.230) but only 1.39% coverage due to dataset sparsity
-- Popularity-based achieves 100% coverage — reliable universal fallback for new customers
-- All three methods substantially outperform random recommendation
+Collaborative filtering comes out on top for precision and lift. Apriori actually ranks items better when it works (NDCG 0.23) but its coverage is only 1.39% — it can only recommend for customers whose purchases match the generated rules, which is a known sparsity problem. Popularity is the safe universal option and covers everyone.
+
+For context — recommending randomly from 3,663 products would give roughly 0.001 precision. All three methods are dramatically better than that.
 
 ---
 
-### Top Apriori Association Rules (by Lift)
+### Sample recommendations from the hybrid pipeline
 
-| Antecedent | Consequent | Confidence | Lift |
-|---|---|---|---|
-| Product 23171 + 23170 | Product 23172 | 81.1% | 66.80x |
-| Product 23172 | Products 23171 + 23170 | 82.6% | 66.80x |
-| Product 23172 + 23170 | Product 23171 | 93.9% | 64.14x |
-| Product 23171 | Product 23172 | 74.8% | 61.59x |
-
-337 rules generated in total. Full rule set: `outputs/tables/apriori_rules.csv`
-
----
-
-### Hybrid Pipeline Sample Output
-
-| Customer | Repeat Predicted | Stage | Top 5 Recommendations | Method |
+| Customer | Repeat buyer? | Stage | Top 5 recommendations | Method used |
 |---|---|---|---|---|
-| 12347 | Yes | Established | 84952C, 84952B, 23509, 16237, 21499 | Collaborative Filtering |
-| 12348 | Yes | Established | 21975, 84991, 21213, 21212, 21977 | Collaborative Filtering |
-| 12349 | No | New | 51014A, 23445, 51014C, 22197, 51014L | Popularity (Country) |
-| 12350 | No | New | 16008, 22693, 22197, 72232, 84050 | Popularity (Country) |
-| 12352 | Yes | Established | 47590B, 23139, 23138, 22759, 22090 | Collaborative Filtering |
+| 12347 | Yes | Established | 84952C, 84952B, 23509, 16237, 21499 | Collaborative filtering |
+| 12348 | Yes | Established | 21975, 84991, 21213, 21212, 21977 | Collaborative filtering |
+| 12349 | No | New | 51014A, 23445, 51014C, 22197, 51014L | Popularity (country) |
+| 12350 | No | New | 16008, 22693, 22197, 72232, 84050 | Popularity (country) |
+| 12352 | Yes | Established | 47590B, 23139, 23138, 22759, 22090 | Collaborative filtering |
 
 ---
 
-## Project Structure
+## Files in this repo
 
 ```
 project root/
 │
 ├── src/
-│   ├── pipeline.py                <- Main pipeline — run this first
-│   ├── apriori_rules.py           <- Apriori market basket (mlxtend)
-│   ├── cf_recommender.py          <- Item-based CF (cosine similarity)
-│   ├── hybrid_pipeline.py         <- Stage-based routing logic
-│   └── recommender_metrics.py     <- Precision@K, Recall@K, NDCG, MAP, Lift
+│   ├── pipeline.py               ← run this first — does everything end to end
+│   ├── apriori_rules.py          ← builds baskets and generates association rules
+│   ├── cf_recommender.py         ← cosine similarity item-based CF
+│   ├── hybrid_pipeline.py        ← decides which method each customer gets
+│   └── recommender_metrics.py    ← Precision@K, Recall@K, NDCG, MAP, Lift, Coverage
 │
 ├── data/
-│   ├── raw/                       <- Place online_retail.xlsx here (not included)
-│   └── processed/                 <- Auto-generated by pipeline.py
-│       ├── transactions_clean.csv
-│       ├── customer_features.csv
-│       └── customer_features_segmented.csv
+│   ├── raw/                      ← put online_retail.xlsx here (not included)
+│   └── processed/                ← generated automatically when pipeline runs
 │
 ├── outputs/
-│   ├── figures/                   <- Auto-generated charts
-│   │   ├── monthly_revenue_trend.png
-│   │   ├── top_countries_revenue.png
-│   │   ├── rf_feature_importance_builtin_top15.png
-│   │   └── rf_feature_importance_permutation_top15.png
-│   │
-│   ├── models/                    <- Not included — regenerate by running pipeline
-│   │   └── best_model_RandomForest.joblib
-│   │
-│   └── tables/                    <- Key CSVs included, large files excluded
-│       ├── model_comparison.csv
-│       ├── recommender_evaluation.csv
-│       ├── critical_evaluation_comparison.csv
-│       ├── apriori_rules.csv
-│       ├── hybrid_recommendations_sample.csv
-│       ├── rf_feature_importance_builtin.csv
-│       ├── rf_feature_importance_permutation.csv
-│       └── [confusion matrices + classification reports]
+│   ├── figures/                  ← charts saved as PNG
+│   ├── models/                   ← saved joblib model files (not included, too large)
+│   └── tables/                   ← all CSV result files
 │
-├── dashboard.py                   <- Streamlit interactive dashboard
-├── demonstrate.py                 <- Terminal demo script
-├── hybrid_pipeline_notebook.ipynb <- Jupyter notebook walkthrough
-├── requirements.txt               <- All dependencies with versions
-├── run_dashboard.sh               <- Mac/Linux launcher
-├── run_dashboard.bat              <- Windows launcher
+├── dashboard.py                  ← streamlit dashboard (6 sections)
+├── demonstrate.py                ← quick terminal summary of results
+├── hybrid_pipeline_notebook.ipynb← step by step notebook walkthrough
+├── requirements.txt
+├── run_dashboard.sh              ← mac/linux launcher
+├── run_dashboard.bat             ← windows launcher
 └── README.md
 ```
 
-> **Note:** The following large files are excluded and must be regenerated locally:
-> - `outputs/tables/item_similarity_matrix.csv` (183MB)
-> - `outputs/models/*.joblib`
-> - `data/raw/online_retail.xlsx` (Kaggle dataset — not redistributable)
-> - `data/processed/transactions_clean.csv`
-> - `data/processed/customer_features.csv`
->
-> Run `python src/pipeline.py` to regenerate all of these automatically.
+**Not included in this repo (too large or not redistributable):**
+- `data/raw/online_retail.xlsx` — download from Kaggle (link below)
+- `data/processed/transactions_clean.csv` — regenerated by pipeline
+- `outputs/tables/item_similarity_matrix.csv` — 183MB, regenerated by pipeline
+- `outputs/models/*.joblib` — regenerated by pipeline
+
+Run `python src/pipeline.py` and everything gets rebuilt from scratch.
 
 ---
 
-## How to Run
+## How to run it
 
-### 1. Clone the Repository
 ```bash
+# clone the repo
 git clone https://github.com/ravisah12345/Customer-Purchase-Behaviour
 cd Customer-Purchase-Behaviour
-```
 
-### 2. Create and Activate Virtual Environment
-```bash
+# set up environment
 python -m venv venv
+source venv/bin/activate        # mac/linux
+venv\Scripts\activate           # windows
 
-# Mac / Linux
-source venv/bin/activate
-
-# Windows
-venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-```bash
+# install dependencies
 pip install -r requirements.txt
 ```
 
-### 4. Add the Dataset
-Download the UCI Online Retail II dataset from Kaggle:
-> (https://www.kaggle.com/datasets/mashlyn/online-retail-ii-uci)
+Download the dataset from Kaggle and place it at `data/raw/online_retail.xlsx`:
+> https://www.kaggle.com/datasets/mashlyn/online-retail-ii-uci
 
-Place the downloaded file at:
-```
-data/raw/online_retail.xlsx
-```
-
-### 5. Run the Full Pipeline
 ```bash
+# run the full pipeline (takes about 8-12 minutes)
 python src/pipeline.py
-```
 
-Expected terminal output:
-```
-Loading data...          Raw shape: (541909, 8)
-Cleaning data...         Clean shape: (397484, 9)
-Creating customer feature table...   Customer table shape: (4332, 11)
-Saving EDA outputs...
-Exporting processed datasets...
-Training and evaluating models...
-Running critical evaluation (temporal split)...
-Exporting feature importance for RandomForest...
-Generating Apriori rules...
-Computing item similarity for Collaborative Filtering...
-Running hybrid recommendation pipeline...
-Evaluating recommender systems...
-All done! Enhanced pipeline completed.
-```
-
-Total runtime: approximately 8-12 minutes depending on machine.
-
-### 6. Launch the Interactive Dashboard
-```bash
+# launch the dashboard
 streamlit run dashboard.py
 
-# Or use the launcher scripts:
-bash run_dashboard.sh       # Mac / Linux
-run_dashboard.bat           # Windows
-```
-
-Opens automatically at http://localhost:8501
-
-### 7. Run the Terminal Demo
-```bash
+# or just see a terminal summary
 python demonstrate.py
-```
 
-Prints a structured summary of all results to the terminal.
-
-### 8. Open the Jupyter Notebook
-```bash
+# or open the notebook walkthrough
 jupyter notebook hybrid_pipeline_notebook.ipynb
 ```
 
-Step-by-step walkthrough of the hybrid pipeline with explanations and visualisations.
+---
+
+## The dashboard
+
+Six sections, launched with `streamlit run dashboard.py`:
+
+- **Overview** — dataset numbers, cleaning stats, country breakdown
+- **Classification** — model comparison, confusion matrix, feature importance
+- **Segmentation** — stage distribution, spend by stage
+- **Recommenders** — metric comparison across all three methods
+- **Interactive demo** — pick any customer ID and see their recommendations live
+- **Business impact** — revenue by segment, practical implications
 
 ---
 
-## Dashboard Sections
+## Tech stack
 
-| Section | What It Shows |
-|---|---|
-| **Overview** | Dataset scale, cleaning statistics, country breakdown, key figures |
-| **Classification** | Model comparison, best model summary, confusion matrix, feature importance |
-| **Segmentation** | Stage distribution, average spend by stage, behavioural characteristics |
-| **Recommenders** | Metric comparison across all 3 methods at K=5 and K=10 |
-| **Interactive Demo** | Select any customer ID to see stage, prediction, top 5 recommendations and method |
-| **Business Impact** | Revenue by segment, ROI implications, deployment considerations |
-
----
-
-## Generated Output Files
-
-| File | Description |
-|---|---|
-| `outputs/tables/model_comparison.csv` | Accuracy, precision, recall, F1 for all 3 classifiers |
-| `outputs/tables/critical_evaluation_comparison.csv` | Standard vs temporal vs cold-start evaluation |
-| `outputs/tables/recommender_evaluation.csv` | 6 metrics at K=5 and K=10 for all 3 methods |
-| `outputs/tables/apriori_rules.csv` | 337 association rules with support, confidence, lift |
-| `outputs/tables/hybrid_recommendations_sample.csv` | Sample output for 5 customers |
-| `outputs/tables/rf_feature_importance_builtin.csv` | MDI feature importance (all features) |
-| `outputs/tables/rf_feature_importance_permutation.csv` | Permutation importance (F1 scoring) |
-| `outputs/tables/RandomForest_classification_report.txt` | Full per-class precision, recall, F1 |
-| `outputs/tables/monthly_revenue.csv` | Monthly revenue Dec 2010 – Dec 2011 |
-| `outputs/tables/top_countries_revenue.csv` | Top 10 countries by total revenue |
-| `outputs/figures/rf_feature_importance_builtin_top15.png` | Top 15 features bar chart |
-| `outputs/figures/rf_feature_importance_permutation_top15.png` | Permutation importance bar chart |
-| `outputs/figures/monthly_revenue_trend.png` | Revenue trend line chart |
-| `outputs/figures/top_countries_revenue.png` | Revenue by country bar chart |
-
----
-
-## Technologies
-
-| Library | Version | Purpose |
+| Library | Version | What it is used for |
 |---|---|---|
-| pandas | 2.3.3 | Data processing and feature engineering |
-| scikit-learn | 1.6.1 | Classification, cosine similarity, preprocessing |
-| mlxtend | 0.23.4 | Apriori algorithm and association rule mining |
-| streamlit | 1.50.0 | Interactive dashboard |
-| plotly | 6.7.0 | Interactive charts in dashboard |
-| matplotlib | 3.9.4 | Static figure exports |
-| joblib | 1.5.3 | Model serialisation and loading |
-| openpyxl | 3.1.5 | Reading .xlsx dataset |
-| numpy | 2.0.2 | Numerical operations |
-| scipy | 1.13.1 | Statistical functions |
-
-Full pinned dependency list: `requirements.txt`
+| pandas | 2.3.3 | data wrangling |
+| scikit-learn | 1.6.1 | classifiers, cosine similarity, preprocessing |
+| mlxtend | 0.23.4 | Apriori algorithm |
+| streamlit | 1.50.0 | dashboard |
+| plotly | 6.7.0 | charts in dashboard |
+| matplotlib | 3.9.4 | static figures |
+| joblib | 1.5.3 | saving and loading models |
+| openpyxl | 3.1.5 | reading the xlsx file |
+| numpy | 2.0.2 | numerical operations |
 
 ---
 
 ## Reproducibility
 
-All random seeds fixed at `42` across every experiment:
+Every random operation uses `random_state=42` so results are identical every time:
 
 ```python
 train_test_split(..., random_state=42)
@@ -386,60 +295,22 @@ DecisionTreeClassifier(..., random_state=42)
 cust.sample(frac=0.2, random_state=42)
 ```
 
-Running `python src/pipeline.py` on the same dataset produces identical results every time.
-
 ---
 
 ## Dataset
 
-| Stat | Value |
-|---|---|
-| Source | Kaggle — https://www.kaggle.com/code/hellbuoy/online-retail-k-means-hierarchical-clustering
-| Raw size | 541,909 transactions x 8 columns |
-| After cleaning | 397,484 transactions x 9 columns |
-| Customers | 4,332 unique |
-| Products | 3,663 unique stock codes |
-| Countries | 37 |
-| Date range | 1 Dec 2010 – 9 Dec 2011 |
-| Repeat buyers | 2,835 (65.4%) |
-| Non-repeat buyers | 1,497 (34.6%) |
+UCI Online Retail II — 541,909 transactions, December 2010 to December 2011, 37 countries.
 
-The dataset is not included in this repository. Download from Kaggle and place at `data/raw/online_retail.xlsx`.
+Download: https://www.kaggle.com/datasets/mashlyn/online-retail-ii-uci
+
+Place at `data/raw/online_retail.xlsx` before running the pipeline.
 
 ---
 
-## .gitignore
-
-```
-# Large generated files
-data/raw/
-data/processed/
-outputs/tables/item_similarity_matrix.csv
-outputs/models/
-
-# Python
-venv/
-__pycache__/
-*.pyc
-.DS_Store
-
-# Jupyter
-.ipynb_checkpoints/
-```
+*Submitted for academic assessment — York St John University, 2026.*
 
 ---
 
-## Academic Context
 
-Submitted as a BSc final-year dissertation at York St John University (2026). The system demonstrates:
 
-- Multi-paradigm machine learning — supervised classification combined with unsupervised recommendation
-- Critical evaluation methodology — temporal split and cold-start analysis
-- Real-world deployment considerations — cold-start problem, coverage vs precision trade-off, fallback design
-- End-to-end reproducible research pipeline with fixed random seeds and automated output generation
 
----
-
-## License
-
-Submitted for academic assessment at York St John University. Available for reference and educational purposes.
