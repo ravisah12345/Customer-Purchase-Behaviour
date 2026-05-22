@@ -103,7 +103,7 @@ When you run the pipeline, here is what happens in order:
 
 | Model | Accuracy | Precision | Recall | F1 |
 |---|---|---|---|---|
-| **Random Forest** ⭐ | **98.50%** | **99.64%** | **98.06%** | **98.84%** |
+| **Random Forest** | **98.50%** | **99.64%** | **98.06%** | **98.84%** |
 | Decision Tree | 97.46% | 97.89% | 98.24% | 98.06% |
 | Logistic Regression | 96.31% | 99.81% | 94.53% | 97.10% |
 
@@ -157,10 +157,10 @@ Established customers spend about 12x more than new ones on average. That gap is
 |---|---|---|---|---|---|---|---|
 | Popularity-based | 5 | 0.1312 | 0.0124 | 96.10x | 0.1320 | 0.0767 | 100% |
 | Apriori (Market Basket) | 5 | 0.1333 | 0.0260 | 97.68x | **0.2304** | **0.1375** | 1.39% |
-| **Collaborative Filtering** ⭐ | **5** | **0.1460** | 0.0249 | **106.93x** | 0.1640 | 0.1168 | **100%** |
+| **Collaborative Filtering** | **5** | **0.1460** | 0.0249 | **106.93x** | 0.1640 | 0.1168 | **100%** |
 | Popularity-based | 10 | 0.1055 | 0.0213 | 38.66x | 0.1154 | 0.0523 | 100% |
 | Apriori (Market Basket) | 10 | 0.0667 | 0.0260 | 24.42x | 0.1609 | 0.0792 | 1.39% |
-| **Collaborative Filtering** ⭐ | **10** | 0.1024 | **0.0320** | 37.52x | 0.1307 | 0.0763 | **100%** |
+| **Collaborative Filtering**  | **10** | 0.1024 | **0.0320** | 37.52x | 0.1307 | 0.0763 | **100%** |
 
 Collaborative filtering comes out on top for precision and lift. Apriori actually ranks items better when it works (NDCG 0.23) but its coverage is only 1.39% — it can only recommend for customers whose purchases match the generated rules, which is a known sparsity problem. Popularity is the safe universal option and covers everyone.
 
